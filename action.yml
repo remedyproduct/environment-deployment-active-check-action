@@ -50,31 +50,62 @@ runs:
           async function resolveTargetRef(input) {
             const raw = (input || '').trim();
 
+            async function resolveToCommitSha(object) {
+              let current = object;
+
+              // Follow annotated tags until we reach a commit
+              while (current.type === 'tag') {
+                const { data: tag } = await github.rest.git.getTag({
+                  owner,
+                  repo,
+                  tag_sha: current.sha,
+                });
+                current = tag.object;
+              }
+
+              if (current.type !== 'commit') {
+                throw new Error(`Unsupported Git object type '${current.type}' for ref '${raw}'`);
+              }
+
+              return current.sha;
+            }
+
             // Full refs like "refs/heads/main" or "refs/tags/v1.0"
             if (raw.startsWith('refs/')) {
               const ref = raw.replace(/^refs\//, '');
               const { data } = await github.rest.git.getRef({ owner, repo, ref });
-              return { sha: data.object.sha, ref };
+              const sha = await resolveToCommitSha(data.object);
+              return { sha, ref };
             }
 
             // Already in "heads/<name>" or "tags/<name>" form
             if (raw.startsWith('heads/') || raw.startsWith('tags/')) {
               const { data } = await github.rest.git.getRef({ owner, repo, ref: raw });
-              return { sha: data.object.sha, ref: raw };
+              const sha = await resolveToCommitSha(data.object);
+              return { sha, ref: raw };
             }
 
             // Plain name: try branch first, then tag
             const branchRef = `heads/${raw}`;
             try {
               const { data } = await github.rest.git.getRef({ owner, repo, ref: branchRef });
-              return { sha: data.object.sha, ref: branchRef };
+              const sha = await resolveToCommitSha(data.object);
+              return { sha, ref: branchRef };
             } catch (error) {
               if (error.status !== 404) throw error;
             }
 
             const tagRef = `tags/${raw}`;
-            const { data } = await github.rest.git.getRef({ owner, repo, ref: tagRef });
-            return { sha: data.object.sha, ref: tagRef };
+            try {
+              const { data } = await github.rest.git.getRef({ owner, repo, ref: tagRef });
+              const sha = await resolveToCommitSha(data.object);
+              return { sha, ref: tagRef };
+            } catch (error) {
+              if (error.status === 404) {
+                throw new Error(`Unable to resolve ref '${raw}': neither branch nor tag found`);
+              }
+              throw error;
+            }
           }
 
           const { sha: targetSha, ref: resolvedRef } = await resolveTargetRef(refInput);
