@@ -46,16 +46,39 @@ runs:
           const owner = context.repo.owner;
           const repo = context.repo.repo;
 
-          // Normalize ref: accept either plain branch name or refs/heads/branch
-          const refName = refInput.replace(/^refs\/(heads|tags)\//, '');
+          // Resolve target SHA for given ref (branch or tag)
+          async function resolveTargetRef(input) {
+            const raw = (input || '').trim();
 
-          // Resolve target SHA for given ref (branch)
-          const ref = await github.rest.git.getRef({
-            owner,
-            repo,
-            ref: `heads/${refName}`,
-          });
-          const targetSha = ref.data.object.sha;
+            // Full refs like "refs/heads/main" or "refs/tags/v1.0"
+            if (raw.startsWith('refs/')) {
+              const ref = raw.replace(/^refs\//, '');
+              const { data } = await github.rest.git.getRef({ owner, repo, ref });
+              return { sha: data.object.sha, ref };
+            }
+
+            // Already in "heads/<name>" or "tags/<name>" form
+            if (raw.startsWith('heads/') || raw.startsWith('tags/')) {
+              const { data } = await github.rest.git.getRef({ owner, repo, ref: raw });
+              return { sha: data.object.sha, ref: raw };
+            }
+
+            // Plain name: try branch first, then tag
+            const branchRef = `heads/${raw}`;
+            try {
+              const { data } = await github.rest.git.getRef({ owner, repo, ref: branchRef });
+              return { sha: data.object.sha, ref: branchRef };
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            const tagRef = `tags/${raw}`;
+            const { data } = await github.rest.git.getRef({ owner, repo, ref: tagRef });
+            return { sha: data.object.sha, ref: tagRef };
+          }
+
+          const { sha: targetSha, ref: resolvedRef } = await resolveTargetRef(refInput);
+          const refName = resolvedRef.replace(/^(heads|tags)\//, '');
 
           // List deployments for the target environment (newest first)
           const deployments = await github.paginate(
@@ -80,7 +103,9 @@ runs:
           }
 
           core.info(`environment: ${envName}`);
-          core.info(`target ref: ${refName}`);
+          core.info(`target ref input: ${refInput}`);
+          core.info(`resolved ref: ${resolvedRef}`);
+          core.info(`target ref name: ${refName}`);
           core.info(`target sha: ${targetSha}`);
           core.info(`active sha: ${activeSha}`);
 
