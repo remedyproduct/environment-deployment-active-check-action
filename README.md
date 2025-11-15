@@ -24,12 +24,27 @@ When the active deployment SHA for the environment matches the ref's current com
 - `active_sha`:
   - The SHA of the current active deployment in the target environment (empty string if none).
 
+## Required permissions
+
+Minimal permissions:
+
+```yaml
+permissions:
+  contents: read
+  deployments: read
+```
+
+If you pass a custom `token`, it must be able to read refs and deployments for the repository.
+
 ## Example Usage
 
 ```yaml
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: read
     outputs:
       should_deploy: ${{ steps.env-check.outputs.should_deploy }}
     steps:
