@@ -1,8 +1,8 @@
-# Environment Deployment Active Check Action
+# Check Active Environment Deployment
 
-Reusable GitHub Action to determine whether a given GitHub environment already has an **active deployment** for a target ref (typically a branch like `main`).
+GitHub Action that checks whether a GitHub environment already has an **active deployment** for a target ref (typically a branch like `main`) and tells you if a new deploy is needed.
 
-When the active deployment SHA for the environment matches the ref's current commit, the action reports `should_deploy = 'false'`, which you can use to skip redundant deployments.
+A common use case is a scheduled (cron) workflow: for example, a nightly job that redeploys `qa` only if `main` has new commits compared to the currently active deployment. When the active deployment SHA matches the ref's current commit, the action reports `should_deploy = 'false'`, so the job can skip the deployment step.
 
 ## Inputs
 
