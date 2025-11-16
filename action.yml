@@ -127,7 +127,7 @@ runs:
             });
 
             const latestStatus = statuses[0];
-            if (latestStatus && latestStatus.state === 'active') {
+            if (latestStatus && latestStatus.state === 'success') {
               activeSha = dep.sha;
               break;
             }
